@@ -1,0 +1,172 @@
+# Planner
+
+A web-based planner app.
+
+## Tech stack
+
+- **Backend** — Python 3.12, FastAPI, SQLAlchemy 2.0, Alembic, managed with [uv](https://github.com/astral-sh/uv)
+- **Frontend** — React 19 + TypeScript + [React Compiler](https://react.dev/learn/react-compiler), built with Vite
+- **Database** — PostgreSQL 16 (Docker)
+
+## Prerequisites
+
+Install once, globally:
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) — for Postgres
+- [Node.js 22 LTS](https://nodejs.org/) — for the frontend
+- [uv](https://github.com/astral-sh/uv) — for the Python backend
+  ```powershell
+  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+  ```
+- [Windows Terminal](https://aka.ms/terminal) (optional but recommended — the dev script uses it for tabbed output)
+
+If PowerShell scripts won't run, enable them once per user:
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+```
+
+## First-time setup
+
+Clone the repo, then from the project root:
+
+**1. Create your environment file**
+```powershell
+Copy-Item .env.example backend\.env
+```
+The defaults match `docker-compose.yml`, so no edits are needed for local dev.
+
+**2. Install backend dependencies**
+```powershell
+cd backend
+uv sync
+cd ..
+```
+
+**3. Install frontend dependencies**
+```powershell
+cd frontend
+npm install
+cd ..
+```
+
+**4. Start Postgres and run the initial migration**
+```powershell
+.\dev.ps1 -DbOnly
+cd backend
+uv run alembic upgrade head
+cd ..
+```
+
+## Daily workflow
+
+One command boots everything:
+
+```powershell
+.\dev.ps1
+```
+
+This opens:
+- **Postgres** on `localhost:5432` (detached, no terminal)
+- **Backend** in a Windows Terminal tab — http://localhost:8000 (API docs at `/docs`)
+- **Frontend** in a Windows Terminal tab — http://localhost:5173
+
+Other modes:
+
+```powershell
+.\dev.ps1 -DbOnly    # just Postgres (useful when running backend tests)
+.\dev.ps1 -Stop      # shut down Postgres
+```
+
+Stop the backend/frontend with `Ctrl+C` in their respective tabs.
+
+## Project structure
+
+```
+planner/
+├── backend/
+│   ├── app/
+│   │   ├── main.py           # FastAPI entrypoint
+│   │   ├── config.py         # env-driven settings (pydantic-settings)
+│   │   ├── database.py       # SQLAlchemy Base + session
+│   │   ├── models.py         # ORM models
+│   │   ├── schemas.py        # Pydantic request/response schemas
+│   │   └── routers/          # API endpoints
+│   ├── alembic/              # database migrations
+│   ├── tests/
+│   ├── pyproject.toml
+│   └── .env                  # local secrets (gitignored)
+├── frontend/
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── vite.config.ts
+├── docker-compose.yml        # Postgres
+├── dev.ps1                   # one-command dev startup
+├── .env.example
+└── README.md
+```
+
+## Common tasks
+
+**Add a backend dependency**
+```powershell
+cd backend
+uv add <package>
+```
+
+**Add a frontend dependency**
+```powershell
+cd frontend
+npm install <package>
+```
+
+**Create a new database migration**
+
+After editing a SQLAlchemy model:
+```powershell
+cd backend
+uv run alembic revision --autogenerate -m "describe the change"
+uv run alembic upgrade head
+```
+
+**Inspect the database directly**
+```powershell
+docker compose exec db psql -U planner -d planner
+```
+
+**Run backend tests**
+```powershell
+cd backend
+uv run pytest
+```
+
+**Reset the database**
+```powershell
+docker compose down -v       # -v also deletes the volume
+.\dev.ps1 -DbOnly
+cd backend
+uv run alembic upgrade head
+```
+
+## Troubleshooting
+
+**`uv run alembic current` fails to parse the URL**
+Make sure `backend/.env` exists and contains `DATABASE_URL=...`. The `sqlalchemy.url` in `alembic.ini` is intentionally blank — the URL is injected from `.env` by `alembic/env.py`.
+
+**`ModuleNotFoundError: No module named 'sqlalchemy'` (or similar)**
+You ran bare `python` or `alembic` instead of going through `uv`. Prefix commands with `uv run`, or activate the venv with `.\.venv\Scripts\Activate.ps1`.
+
+**`nvm` / `uv` / `docker` not recognized after install**
+Windows PATH updates don't reach already-open processes. Fully quit VS Code (check the system tray) and reopen, or restart your terminal.
+
+**VS Code's Pylance can't find the `app` module**
+Open the workspace root, then `Ctrl+Shift+P` → "Python: Select Interpreter" → pick `backend\.venv\Scripts\python.exe`. If imports still show squiggles, add `"python.analysis.extraPaths": ["./backend"]` to `.vscode/settings.json`.
+
+**Postgres won't start**
+Check that Docker Desktop is actually running (not just installed), then `docker compose logs db` to see what's failing. To start from scratch: `docker compose down -v`.
+
+## API documentation
+
+With the backend running, interactive API docs are auto-generated by FastAPI:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
